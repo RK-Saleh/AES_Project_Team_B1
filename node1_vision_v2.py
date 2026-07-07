@@ -7,9 +7,9 @@ import paho.mqtt.client as mqtt
 from ultralytics import YOLO
 from flask import Flask, Response
 
-# ==========================================
+
 # 1. CONFIGURATION
-# ==========================================
+
 MODEL_NAME = 'best_ncnn_model'
 CONFIDENCE_THRESHOLD = 0.50
 
@@ -26,9 +26,9 @@ COLOR_MAP = {'SAFE': (0, 255, 0), 'HAZARDOUS': (0, 0, 255)}
 CAMERA_PATH = "/dev/v4l/by-id/usb-Image+_UGREEN_Camera_4K_LL-0000000001-video-index0"
 STREAM_FPS  = 30                                               # target stream rate
 
-# ==========================================
+
 # 2. SHARED STATE
-# ==========================================
+
 # Raw camera frames — capture thread writes, all others read
 raw_frame = None
 raw_lock  = threading.Lock()
@@ -48,9 +48,9 @@ latest_distance = None
 latest_speed    = None
 tel_lock        = threading.Lock()
 
-# ==========================================
+
 # 3. CAMERA CAPTURE THREAD
-# ==========================================
+
 def capture_loop(cap):
     """
     Runs in its own thread.  Continuously drains the V4L2 kernel buffer
@@ -65,33 +65,18 @@ def capture_loop(cap):
             with raw_lock:
                 raw_frame = frame
 
-# ==========================================
-# 4. STREAM COMPOSITING THREAD  ← NEW KEY FIX
-# ==========================================
+
+# 4. STREAM COMPOSITING THREAD 
+
 def stream_loop():
-    """
-    Runs at STREAM_FPS (30 Hz), completely independent of YOLO speed.
-
-    Each iteration:
-      1. Grabs the latest raw camera frame.
-      2. Redraws the most recently computed YOLO bounding boxes on it.
-      3. Adds the HUD.
-      4. Writes to global_frame for Flask to serve.
-
-    Result: the MJPEG stream is smooth at 30 FPS regardless of how long
-    each inference pass takes.  Between inference passes the detections
-    "stick" — boxes remain visible on the live scene until YOLO updates them.
-
-    The HUD now shows "AI: X FPS (inference)" which is the honest
-    throughput of the YOLO engine, separate from stream delivery speed.
-    """
+    
     global global_frame
     interval = 1.0 / STREAM_FPS
 
     while True:
         t0 = time.time()
 
-        # ── 1. Grab latest raw frame ──────────────────────────────
+        #  1. Grab latest raw frame 
         with raw_lock:
             src = raw_frame
         if src is None:
@@ -99,7 +84,7 @@ def stream_loop():
             continue
         frame = src.copy()          # stable local copy for this compositing pass
 
-        # ── 2. Overlay last-known YOLO detections ─────────────────
+        #  2. Overlay last-known YOLO detections 
         with boxes_lock:
             boxes    = list(last_boxes)
             status   = last_status
@@ -112,7 +97,7 @@ def stream_loop():
             cv2.putText(frame, f"{det['label'].upper()} {det['confidence']:.2f}",
                         (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # ── 3. HUD overlay ────────────────────────────────────────
+        #  3. HUD overlay 
         with tel_lock:
             dist = latest_distance
             spd  = latest_speed
@@ -128,7 +113,7 @@ def stream_loop():
         cv2.putText(frame, f"D:{d_str}  V:{s_str}",
                     (10, 92), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
-        # ── 4. Hand off to Flask ──────────────────────────────────
+        # 4. Hand off to Flask 
         with frame_lock:
             global_frame = frame
 
@@ -138,9 +123,9 @@ def stream_loop():
         if remaining > 0:
             time.sleep(remaining)
 
-# ==========================================
+
 # 5. FLASK WEB SERVER
-# ==========================================
+
 app = Flask(__name__)
 
 def generate_frames():
@@ -166,14 +151,14 @@ def video_feed():
 def run_flask():
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
-# ==========================================
+
 # 6. AI & MQTT NODE
-# ==========================================
+
 class AirspaceSurveillanceNode:
     def __init__(self):
         print("🚀 Initializing Edge-AI Airspace Surveillance System...")
 
-        # ── MQTT ──────────────────────────────────────────────────
+        # MQTT
         self.mqtt_client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, client_id="Pi_Node_1")
         self.mqtt_client.on_connect = self.on_connect
@@ -186,7 +171,7 @@ class AirspaceSurveillanceNode:
         except Exception as e:
             print(f"❌ MQTT connection failed: {e}")
 
-        # ── YOLO ──────────────────────────────────────────────────
+        # YOLO
         try:
             self.model = YOLO(MODEL_NAME, task='detect')
             print(f"✅ YOLO model '{MODEL_NAME}' loaded.")
@@ -194,7 +179,7 @@ class AirspaceSurveillanceNode:
             print(f"❌ Failed to load YOLO model: {e}")
             exit(1)
 
-        # ── Camera ────────────────────────────────────────────────
+        # Camera
         self.cap = cv2.VideoCapture(CAMERA_PATH, cv2.CAP_V4L2)
         # MJPG: compresses on-chip → ~10× less USB bandwidth than YUYV
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
@@ -248,7 +233,7 @@ class AirspaceSurveillanceNode:
 
             results = self.model(frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
 
-            # ── Parse detections ──────────────────────────────────
+            # Parse detections 
             boxes          = []
             detections_list = []
             hazard_count   = 0
@@ -275,13 +260,13 @@ class AirspaceSurveillanceNode:
             status  = "CLEAR" if hazard_count == 0 else "THREAT_DETECTED"
             inf_fps = 1.0 / max(time.time() - t0, 1e-6)
 
-            # ── Push results to stream_loop ───────────────────────
+            #  Push results to stream_loop 
             with boxes_lock:
                 last_boxes   = boxes
                 last_status  = status
                 last_inf_fps = inf_fps
 
-            # ── Build and publish MQTT payload ────────────────────
+            #  Build and publish MQTT payload
             with tel_lock:
                 dist = latest_distance
                 spd  = latest_speed
@@ -308,9 +293,9 @@ class AirspaceSurveillanceNode:
                 print(f"🔔 Alert → ESP32: {alert_state}")
 
 
-# ==========================================
+
 # 7. ENTRY POINT
-# ==========================================
+
 if __name__ == '__main__':
     # 1. Flask streaming server
     threading.Thread(target=run_flask, daemon=True).start()

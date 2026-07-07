@@ -1,0 +1,145 @@
+[
+    {
+        "id": "5ae06455479d51a3",
+        "type": "tab",
+        "label": "Flow 4",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "airspace_mqtt_in",
+        "type": "mqtt in",
+        "z": "5ae06455479d51a3",
+        "name": "Listen for YOLO Airspace Data",
+        "topic": "airspace/surveillance/state",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "local_mosquitto_broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 410,
+        "y": 320,
+        "wires": [
+            [
+                "parse_airspace_data",
+                "debug_airspace"
+            ]
+        ]
+    },
+    {
+        "id": "parse_airspace_data",
+        "type": "function",
+        "z": "5ae06455479d51a3",
+        "name": "Prepare Data & Telemetry",
+        "func": "const data = msg.payload;\n\n// Failsafe in case of empty payload\nif (!data || !data.summary) return null;\n\nlet signatures = 'None';\nlet primaryTarget = 'NONE';\n\n// Extract the list of detections and find the primary target\nif (data.detections && data.detections.length > 0) {\n    signatures = data.detections.map(d => `${d.object_type.toUpperCase()} (${(d.confidence * 100).toFixed(0)}%)`).join(', ');\n    // Grab the first detected object as the primary focus\n    primaryTarget = data.detections[0].object_type.toUpperCase();\n}\n\n// Create the UI data object including the new Arduino Hooks\nconst uiData = {\n    timestamp: new Date().toLocaleTimeString(),\n    status: data.status || 'UNKNOWN',\n    totalTracked: data.summary.total_objects || 0,\n    safeCount: data.summary.safe_count || 0,\n    hazardCount: data.summary.hazard_count || 0,\n    activeSignatures: signatures,\n    primaryTarget: primaryTarget,\n    \n    // Hooking in Arduino Data. If it doesn't exist yet, show 'WAITING...'\n    distance: data.distance !== undefined ? data.distance + ' m' : 'WAITING...',\n    speed: data.speed !== undefined ? data.speed + ' km/h' : 'WAITING...'\n};\n\nmsg.payload = uiData;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 700,
+        "y": 320,
+        "wires": [
+            [
+                "ui_airspace_radar"
+            ]
+        ]
+    },
+    {
+        "id": "ui_airspace_radar",
+        "type": "ui_template",
+        "z": "5ae06455479d51a3",
+        "group": "radar_ui_group",
+        "name": "Airspace Command UI",
+        "order": 1,
+        "width": "24",
+        "height": "14",
+        "format": "<style>\n    * { box-sizing: border-box; }\n    .radar-container { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; padding: 20px; border-radius: 12px; color: #e0e0e0; height: 100%; }\n    .radar-header { background: #1e1e1e; border-left: 5px solid #0066cc; padding: 15px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }\n    .radar-header h2 { margin: 0; font-size: 22px; font-weight: 600; color: #ffffff; letter-spacing: 1px; }\n    .time-stamp { color: #888; font-family: monospace; font-size: 16px; }\n    \n    /* Main Metrics */\n    .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px; }\n    .metric-card { background: #1e1e1e; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #333; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }\n    .metric-title { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; }\n    .metric-value { font-size: 42px; font-weight: bold; line-height: 1; }\n    \n    /* Color Coding */\n    .val-safe { color: #00e676; text-shadow: 0 0 10px rgba(0,230,118,0.3); }\n    .val-hazard { color: #ff1744; text-shadow: 0 0 10px rgba(255,23,68,0.3); }\n    .val-neutral { color: #29b6f6; }\n    .val-warning { color: #ffea00; }\n\n    /* Telemetry Panel */\n    .telemetry-panel { background: #0f1924; border: 1px solid #0050a0; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; box-shadow: inset 0 0 20px rgba(0, 102, 204, 0.1); }\n    .tel-label { font-size: 11px; color: #4da6ff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }\n    .tel-value { font-size: 26px; font-weight: bold; color: #ffffff; font-family: monospace; }\n\n    /* Status & Log */\n    .status-banner { padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; transition: all 0.3s ease; margin-bottom: 15px; }\n    .status-clear { background: rgba(0, 230, 118, 0.1); color: #00e676; border: 2px solid #00e676; }\n    .status-threat { background: rgba(255, 23, 68, 0.15); color: #ff1744; border: 2px solid #ff1744; animation: pulse-red 1.5s infinite; }\n    .log-window { background: #0a0a0a; border: 1px solid #333; padding: 15px; border-radius: 8px; font-family: monospace; color: #00e676; }\n    .log-title { color: #888; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; }\n    \n    @keyframes pulse-red {\n        0% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.4); }\n        70% { box-shadow: 0 0 0 15px rgba(255, 23, 68, 0); }\n        100% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0); }\n    }\n</style>\n\n<div class=\"radar-container\" ng-init=\"data = msg.payload\">\n    <div class=\"radar-header\">\n        <h2>📡 AIRSPACE COMMAND</h2>\n        <div class=\"time-stamp\">{{data.timestamp}}</div>\n    </div>\n    \n    <div class=\"metrics-grid\">\n        <div class=\"metric-card\">\n            <div class=\"metric-title\">Total Tracked</div>\n            <div class=\"metric-value val-neutral\">{{data.totalTracked || 0}}</div>\n        </div>\n        <div class=\"metric-card\">\n            <div class=\"metric-title\">Safe Aircraft</div>\n            <div class=\"metric-value val-safe\">{{data.safeCount || 0}}</div>\n        </div>\n        <div class=\"metric-card\">\n            <div class=\"metric-title\">Active Hazards</div>\n            <div class=\"metric-value val-hazard\">{{data.hazardCount || 0}}</div>\n        </div>\n    </div>\n\n    \n    <div class=\"telemetry-panel\">\n        <div>\n            <div class=\"tel-label\">Primary Target</div>\n            <div class=\"tel-value\" ng-class=\"{'val-hazard': data.status === 'THREAT_DETECTED', 'val-neutral': data.status === 'CLEAR'}\">\n                {{data.primaryTarget || 'NONE'}}\n            </div>\n        </div>\n        <div>\n            <div class=\"tel-label\">Distance to Target</div>\n            <div class=\"tel-value val-warning\">{{data.distance || '---'}}</div>\n        </div>\n        <div>\n            <div class=\"tel-label\">Velocity (Speed)</div>\n            <div class=\"tel-value val-warning\">{{data.speed || '---'}}</div>\n        </div>\n    </div>\n\n    <div class=\"status-banner\" ng-class=\"{'status-clear': data.status === 'CLEAR', 'status-threat': data.status === 'THREAT_DETECTED'}\">\n        SYSTEM: {{data.status || 'STANDBY'}}\n    </div>\n\n    <div class=\"log-window\">\n        <div class=\"log-title\">Radar Signatures Detected:</div>\n        <div>> {{data.activeSignatures || 'Awaiting telemetry...'}}</div>\n    </div>\n</div>\n\n<script>\n(function(scope) {\n    scope.$watch('msg', function(msg) {\n        if (msg && msg.payload) {\n            scope.data = msg.payload;\n        }\n    });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 980,
+        "y": 320,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "debug_airspace",
+        "type": "debug",
+        "z": "5ae06455479d51a3",
+        "name": "Log Raw Payload",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 700,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "local_mosquitto_broker",
+        "type": "mqtt-broker",
+        "name": "Localhost Broker",
+        "broker": "10.40.147.160",
+        "port": "1883",
+        "clientid": "NodeRED_Dashboard_UI",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "radar_ui_group",
+        "type": "ui_group",
+        "name": "Airspace Monitoring",
+        "tab": "dashboard_tab_id",
+        "order": 1,
+        "disp": false,
+        "width": "24",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "dashboard_tab_id",
+        "type": "ui_tab",
+        "name": "Tactical Radar",
+        "icon": "track_changes",
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "821e91b9b1279ffc",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]

@@ -1,19 +1,19 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-// ── WiFi credentials ──────────────────────────────────────
+// ── WiFi credentials 
 const char* ssid        = "Pixel21";
 const char* password    = "12345678a";
 
-// ── Raspberry Pi MQTT Broker ──────────────────────────────
-const char* mqtt_server = "10.40.147.160";   // Pi's IP
+// ── Raspberry Pi MQTT Broker 
+const char* mqtt_server = "10.40.147.160";   
 const int   mqtt_port   = 1883;
 const char* alert_topic = "airspace/alert"; 
 
-// ── Buzzer Pin ────────────────────────────────────────────
+// ── Buzzer Pin 
 const int BUZZER_PIN = 5;
 
-// ── Non-Blocking State Variables (ACTIVE-HIGH LOGIC) ──────
+// ── Non-Blocking State Variables (ACTIVE-HIGH LOGIC) 
 bool isAlarmActive = false;
 unsigned long lastBuzzerToggle = 0;
 bool buzzerState = LOW; // LOW = OFF, HIGH = ON
@@ -21,7 +21,7 @@ bool buzzerState = LOW; // LOW = OFF, HIGH = ON
 WiFiClient   espClient;
 PubSubClient client(espClient);
 
-// ── Connect to WiFi ───────────────────────────────────────
+// ── Connect to WiFi 
 void connectWiFi() {
   Serial.print("Connecting to WiFi");
   WiFi.begin(ssid, password);
@@ -32,7 +32,7 @@ void connectWiFi() {
   Serial.println("\nWiFi Connected! IP: " + WiFi.localIP().toString());
 }
 
-// ── Called automatically when MQTT message arrives ────────
+// ── Called automatically when MQTT message arrives 
 void onMessageReceived(char* topic, byte* payload, unsigned int length) {
   String message = "";
   for (int i = 0; i < length; i++) message += (char)payload[i];
@@ -56,7 +56,7 @@ void onMessageReceived(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// ── Connect to MQTT Broker (Pi) ───────────────────────────
+// ── Connect to MQTT Broker (Pi) 
 void connectMQTT() {
   while (!client.connected()) {
     Serial.print("Connecting to MQTT Broker...");
@@ -75,7 +75,7 @@ void connectMQTT() {
   }
 }
 
-// ── Setup ─────────────────────────────────────────────────
+// ── Setup 
 void setup() {
   Serial.begin(115200);
   pinMode(BUZZER_PIN, OUTPUT);
@@ -91,7 +91,7 @@ void setup() {
   connectMQTT();
 }
 
-// ── Loop ──────────────────────────────────────────────────
+// ── Loop 
 void loop() {
   if (!client.connected()) {
     connectMQTT();
@@ -99,7 +99,7 @@ void loop() {
   
   client.loop(); // Must run rapidly without being blocked by delay()
 
-  // ── Non-Blocking Buzzer Logic (ACTIVE-HIGH FIX) ─────────
+  // ── Non-Blocking Buzzer Logic (ACTIVE-HIGH FIX) 
   if (isAlarmActive) {
     unsigned long currentMillis = millis();
     

@@ -3,20 +3,19 @@
 #include <ArduinoMqttClient.h>
 #include <NewPing.h>
 
-// ==========================================
-// 1. CONFIGURATION & CREDENTIALS
-// ==========================================
-const char ssid[] = "Pixel21";          // <-- CHANGE THIS
-const char pass[] = "12345678a";        // <-- CHANGE THIS
 
-// IP address of Node 1 (Raspberry Pi) running Mosquitto / Node-RED
-const char broker[] = "10.40.147.160";   // <-- CHANGE THIS
+// 1. CONFIGURATION & CREDENTIALS
+
+const char ssid[] = "Pixel21";         
+const char pass[] = "12345678a"; 
+
+// IP address of Node 1 running Mosquitto / Node-RED
+const char broker[] = "10.40.147.160"; 
 int        port     = 1883;
 const char topic[]  = "airspace/node2/telemetry";
 
-// ==========================================
 // 2. HARDWARE PINS & CONSTANTS
-// ==========================================
+
 #define TRIGGER_PIN  9
 #define ECHO_PIN     10
 #define MAX_DISTANCE 100 // 50cm limit for bench testing
@@ -25,9 +24,9 @@ NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
 
-// ==========================================
+
 // 3. TIMING & KINEMATICS VARIABLES
-// ==========================================
+
 unsigned long lastSensorReadTime = 0;
 unsigned long lastPublishTime = 0;
 const int sensorInterval = 50;     // Fast loop: Physics (50ms)
@@ -38,7 +37,7 @@ int readings[numReadings];
 float smoothedDistance_cm = 0;
 
 float previousDistance_cm = 0;
-unsigned long lastSpeedTime = 0;   // Replaces previousTime for wider window
+unsigned long lastSpeedTime = 0;  
 float speed_mps = 0;
 bool firstReading = true;
 int currentRaw_cm = 0;
@@ -103,9 +102,8 @@ void loop() {
   }
 }
 
-// ==========================================
 // ADVANCED SIGNAL PROCESSING
-// ==========================================
+
 
 void updateDistanceFilter(int newReading) {
   // 1. Shift old readings left (discard oldest)
@@ -155,7 +153,7 @@ void calculateSpeed(unsigned long currentTime) {
     float raw_velocity_mps = (delta_d / (float)delta_t) * 10.0; 
 
     // Apply a light Low-Pass Filter (EMA) to the speed: 
-    // 60% new reading, 40% old reading (acts as software inertia)
+    // 60% new reading, 40% old reading 
     speed_mps = (0.6 * raw_velocity_mps) + (0.4 * speed_mps);
 
     // Save state for the next kinematic window
@@ -164,9 +162,8 @@ void calculateSpeed(unsigned long currentTime) {
   }
 }
 
-// ==========================================
+
 // NETWORK FUNCTIONS
-// ==========================================
 
 void publishTelemetry() {
   // Convert cm to meters
